@@ -75,6 +75,9 @@ public abstract class BeanUtils {
 	private static final Set<Class<?>> unknownEditorTypes =
 			Collections.newSetFromMap(new ConcurrentReferenceHashMap<>(64));
 
+	/**
+	 * 基本类型初始化值
+	 */
 	private static final Map<Class<?>, Object> DEFAULT_TYPE_VALUES;
 
 	static {
@@ -131,14 +134,18 @@ public abstract class BeanUtils {
 	 * @see Constructor#newInstance
 	 */
 	public static <T> T instantiateClass(Class<T> clazz) throws BeanInstantiationException {
+		// 必须保证初始化类必须有public默认无参数构造器，注意初始化内部类时，内部类必须是静态的，否则报错！
 		Assert.notNull(clazz, "Class must not be null");
+		// class为接口，抛出异常
 		if (clazz.isInterface()) {
 			throw new BeanInstantiationException(clazz, "Specified class is an interface");
 		}
 		try {
+			// clazz.getDeclaredConstructor()调用不带参数，整体返回无参构造函数
 			return instantiateClass(clazz.getDeclaredConstructor());
 		}
 		catch (NoSuchMethodException ex) {
+			// 返回与Kotlin主构造函数相对应的Java构造函数
 			Constructor<T> ctor = findPrimaryConstructor(clazz);
 			if (ctor != null) {
 				return instantiateClass(ctor);
@@ -184,26 +191,34 @@ public abstract class BeanUtils {
 	public static <T> T instantiateClass(Constructor<T> ctor, Object... args) throws BeanInstantiationException {
 		Assert.notNull(ctor, "Constructor must not be null");
 		try {
+			// 反射工具类，设置构造器可访问权限
 			ReflectionUtils.makeAccessible(ctor);
+
+			// 存在kotlin类型，并且构造函数是kotlin类型
 			if (KotlinDetector.isKotlinReflectPresent() && KotlinDetector.isKotlinType(ctor.getDeclaringClass())) {
+				// kotlin 初始化类
 				return KotlinDelegate.instantiateClass(ctor, args);
 			}
 			else {
 				Class<?>[] parameterTypes = ctor.getParameterTypes();
+				// 改函数参数个数应该小于等于构造器参数个数，否则提示无法实例化
 				Assert.isTrue(args.length <= parameterTypes.length, "Can't specify more arguments than constructor parameters");
 				Object[] argsWithDefaultValues = new Object[args.length];
 				for (int i = 0 ; i < args.length; i++) {
 					if (args[i] == null) {
 						Class<?> parameterType = parameterTypes[i];
+						// 如果构造函数参数是基本类型（bool、byte、short、int、long），则初始化为默认值，否则初始化为null
 						argsWithDefaultValues[i] = (parameterType.isPrimitive() ? DEFAULT_TYPE_VALUES.get(parameterType) : null);
 					}
 					else {
 						argsWithDefaultValues[i] = args[i];
 					}
 				}
+				// 构造器的newInstance方法
 				return ctor.newInstance(argsWithDefaultValues);
 			}
 		}
+		// 异常栈
 		catch (InstantiationException ex) {
 			throw new BeanInstantiationException(ctor, "Is it an abstract class?", ex);
 		}

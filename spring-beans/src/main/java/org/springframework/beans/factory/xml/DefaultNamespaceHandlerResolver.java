@@ -115,24 +115,36 @@ public class DefaultNamespaceHandlerResolver implements NamespaceHandlerResolver
 	@Override
 	@Nullable
 	public NamespaceHandler resolve(String namespaceUri) {
+		// 获取所有已经配置的handler映射（读取spring.handlers配置文件，并将配置文件缓存在map里）
 		Map<String, Object> handlerMappings = getHandlerMappings();
+		// 根据命名空间找到对应的handler信息
 		Object handlerOrClassName = handlerMappings.get(namespaceUri);
 		if (handlerOrClassName == null) {
 			return null;
 		}
 		else if (handlerOrClassName instanceof NamespaceHandler) {
+			// 没有做过解析的情况，直接从缓存读取
 			return (NamespaceHandler) handlerOrClassName;
 		}
 		else {
+			// 已经做过解析，则返回的是类路径
 			String className = (String) handlerOrClassName;
 			try {
+				// 使用反射将类路径转换为类
 				Class<?> handlerClass = ClassUtils.forName(className, this.classLoader);
+				// todo: 解析class类，深入了解反射机制
+				// 从类继承的角度去判断，是否为某个类的父类（父类.class.isAssignableFrom(子类.class)）
+				// 如果NamespaceHandler不是父类，则抛出异常
 				if (!NamespaceHandler.class.isAssignableFrom(handlerClass)) {
 					throw new FatalBeanException("Class [" + className + "] for namespace [" + namespaceUri +
 							"] does not implement the [" + NamespaceHandler.class.getName() + "] interface");
 				}
+				// todo： 解析BeanUtils类，了解BeanUtils方法使用
+				// BeanUtils.instantiateClass 根据类初始化实例对象
 				NamespaceHandler namespaceHandler = (NamespaceHandler) BeanUtils.instantiateClass(handlerClass);
+				// 调用自定义的NamespaceHandler中的init方法，注册beanDefinitionParser
 				namespaceHandler.init();
+				// 记录到缓存里
 				handlerMappings.put(namespaceUri, namespaceHandler);
 				return namespaceHandler;
 			}
@@ -152,20 +164,24 @@ public class DefaultNamespaceHandlerResolver implements NamespaceHandlerResolver
 	 */
 	private Map<String, Object> getHandlerMappings() {
 		Map<String, Object> handlerMappings = this.handlerMappings;
+		// 如果没有被缓存，则开始进行缓存
 		if (handlerMappings == null) {
 			synchronized (this) {
+				// 双重检测
 				handlerMappings = this.handlerMappings;
 				if (handlerMappings == null) {
 					if (logger.isTraceEnabled()) {
 						logger.trace("Loading NamespaceHandler mappings from [" + this.handlerMappingsLocation + "]");
 					}
 					try {
+						// this.handlerMappingsLocation 在构造函数初始化中已经被初始化为：DEFAULT_HANDLER_MAPPINGS_LOCATION = "META-INF/spring.handlers"
 						Properties mappings =
 								PropertiesLoaderUtils.loadAllProperties(this.handlerMappingsLocation, this.classLoader);
 						if (logger.isTraceEnabled()) {
 							logger.trace("Loaded NamespaceHandler mappings: " + mappings);
 						}
 						handlerMappings = new ConcurrentHashMap<>(mappings.size());
+						// 将Properties格式文件合并到Map格式的handlerMappings中
 						CollectionUtils.mergePropertiesIntoMap(mappings, handlerMappings);
 						this.handlerMappings = handlerMappings;
 					}

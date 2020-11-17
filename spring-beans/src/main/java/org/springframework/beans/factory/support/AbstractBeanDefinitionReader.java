@@ -51,6 +51,9 @@ public abstract class AbstractBeanDefinitionReader implements BeanDefinitionRead
 	/** Logger available to subclasses. */
 	protected final Log logger = LogFactory.getLog(getClass());
 
+	/**
+	 * bean definition注册器
+	 */
 	private final BeanDefinitionRegistry registry;
 
 	@Nullable
@@ -61,6 +64,9 @@ public abstract class AbstractBeanDefinitionReader implements BeanDefinitionRead
 
 	private Environment environment;
 
+	/**
+	 * beanName生成器
+	 */
 	private BeanNameGenerator beanNameGenerator = DefaultBeanNameGenerator.INSTANCE;
 
 

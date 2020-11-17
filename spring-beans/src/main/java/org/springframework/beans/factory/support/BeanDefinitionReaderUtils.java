@@ -58,8 +58,10 @@ public abstract class BeanDefinitionReaderUtils {
 			@Nullable String parentName, @Nullable String className, @Nullable ClassLoader classLoader) throws ClassNotFoundException {
 
 		GenericBeanDefinition bd = new GenericBeanDefinition();
+		// parentName可能为空
 		bd.setParentName(parentName);
 		if (className != null) {
+			// 如果classLoader不为空，则使用传入的classLoader同一虚拟机加载类对象，否则只是记录className
 			if (classLoader != null) {
 				bd.setBeanClass(ClassUtils.forName(className, classLoader));
 			}
@@ -106,9 +108,11 @@ public abstract class BeanDefinitionReaderUtils {
 
 		String generatedBeanName = definition.getBeanClassName();
 		if (generatedBeanName == null) {
+			// 父类beanName+“$child”
 			if (definition.getParentName() != null) {
 				generatedBeanName = definition.getParentName() + "$child";
 			}
+			// 工厂类beanName+“$created”
 			else if (definition.getFactoryBeanName() != null) {
 				generatedBeanName = definition.getFactoryBeanName() + "$created";
 			}
@@ -119,11 +123,11 @@ public abstract class BeanDefinitionReaderUtils {
 		}
 
 		if (isInnerBean) {
-			// Inner bean: generate identity hashcode suffix.
+			// 内部bean：如果是内部bean，生成的beanName+“#”+哈希码
 			return generatedBeanName + GENERATED_BEAN_NAME_SEPARATOR + ObjectUtils.getIdentityHexString(definition);
 		}
 
-		// Top-level bean: use plain class name with unique suffix if necessary.
+		// beanName唯一化（例子：xxParent$child#sldfka4121ads54f#12）
 		return uniqueBeanName(generatedBeanName, registry);
 	}
 
@@ -140,7 +144,7 @@ public abstract class BeanDefinitionReaderUtils {
 		String id = beanName;
 		int counter = -1;
 
-		// Increase counter until the id is unique.
+		// 增加后缀数字，直至唯一（beanName+“#”+数字）
 		String prefix = beanName + GENERATED_BEAN_NAME_SEPARATOR;
 		while (counter == -1 || registry.containsBeanDefinition(id)) {
 			counter++;
@@ -159,11 +163,11 @@ public abstract class BeanDefinitionReaderUtils {
 			BeanDefinitionHolder definitionHolder, BeanDefinitionRegistry registry)
 			throws BeanDefinitionStoreException {
 
-		// Register bean definition under primary name.
+		// 使用beanName作为唯一标识注册
 		String beanName = definitionHolder.getBeanName();
 		registry.registerBeanDefinition(beanName, definitionHolder.getBeanDefinition());
 
-		// Register aliases for bean name, if any.
+		// 注册所有的别名.
 		String[] aliases = definitionHolder.getAliases();
 		if (aliases != null) {
 			for (String alias : aliases) {

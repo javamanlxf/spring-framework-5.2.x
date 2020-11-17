@@ -127,7 +127,9 @@ class XmlBeanFactoryTests {
 
 	@Test  // SPR-2368
 	void collectionsReferredToAsRefLocals() {
+		// 构建BeanFactory（忽略aware接口的自动装配）
 		DefaultListableBeanFactory factory = new DefaultListableBeanFactory();
+		// BeanDefinitionReader 解析bean xml文件，构建BeanDefinition
 		new XmlBeanDefinitionReader(factory).loadBeanDefinitions(COLLECTIONS_XSD_CONTEXT);
 		factory.preInstantiateSingletons();
 	}

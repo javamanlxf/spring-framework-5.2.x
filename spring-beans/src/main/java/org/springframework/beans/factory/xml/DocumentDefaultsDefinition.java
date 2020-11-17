@@ -38,6 +38,10 @@ public class DocumentDefaultsDefinition implements DefaultsDefinition {
 	@Nullable
 	private String autowire;
 
+	/**
+	 * default-autowire-candidates属性，用于定义哪些bean可以作为候选者，default-autowire-candidates的值是个通配符如：
+	 * default-autowire-candidates="*Service"
+	 */
 	@Nullable
 	private String autowireCandidates;
 
