@@ -76,7 +76,7 @@ public abstract class BeanUtils {
 			Collections.newSetFromMap(new ConcurrentReferenceHashMap<>(64));
 
 	/**
-	 * 基本类型初始化值
+	 * 类型默认值，初始化时加载基本类型默认值
 	 */
 	private static final Map<Class<?>, Object> DEFAULT_TYPE_VALUES;
 
@@ -103,15 +103,19 @@ public abstract class BeanUtils {
 	@Deprecated
 	public static <T> T instantiate(Class<T> clazz) throws BeanInstantiationException {
 		Assert.notNull(clazz, "Class must not be null");
+		// 如果是接口类型，抛出异常
 		if (clazz.isInterface()) {
 			throw new BeanInstantiationException(clazz, "Specified class is an interface");
 		}
 		try {
+			// 类的无参构造方法
 			return clazz.newInstance();
 		}
+		// 抽象类不能创建实例
 		catch (InstantiationException ex) {
 			throw new BeanInstantiationException(clazz, "Is it an abstract class?", ex);
 		}
+		// 构造方法无权限
 		catch (IllegalAccessException ex) {
 			throw new BeanInstantiationException(clazz, "Is the constructor accessible?", ex);
 		}
@@ -172,6 +176,7 @@ public abstract class BeanUtils {
 	 */
 	@SuppressWarnings("unchecked")
 	public static <T> T instantiateClass(Class<?> clazz, Class<T> assignableTo) throws BeanInstantiationException {
+		// 从继承的角度判断是父子关系
 		Assert.isAssignable(assignableTo, clazz);
 		return (T) instantiateClass(clazz);
 	}
@@ -211,6 +216,7 @@ public abstract class BeanUtils {
 						argsWithDefaultValues[i] = (parameterType.isPrimitive() ? DEFAULT_TYPE_VALUES.get(parameterType) : null);
 					}
 					else {
+						// 包含参数则使用构造函数的参数
 						argsWithDefaultValues[i] = args[i];
 					}
 				}
@@ -219,15 +225,19 @@ public abstract class BeanUtils {
 			}
 		}
 		// 异常栈
+		// 抽象类
 		catch (InstantiationException ex) {
 			throw new BeanInstantiationException(ctor, "Is it an abstract class?", ex);
 		}
+		// 构造方法不可访问
 		catch (IllegalAccessException ex) {
 			throw new BeanInstantiationException(ctor, "Is the constructor accessible?", ex);
 		}
+		// 参数异常
 		catch (IllegalArgumentException ex) {
 			throw new BeanInstantiationException(ctor, "Illegal arguments for constructor", ex);
 		}
+		// 构造方法异常
 		catch (InvocationTargetException ex) {
 			throw new BeanInstantiationException(ctor, "Constructor threw exception", ex.getTargetException());
 		}
@@ -245,6 +255,7 @@ public abstract class BeanUtils {
 	@Nullable
 	public static <T> Constructor<T> findPrimaryConstructor(Class<T> clazz) {
 		Assert.notNull(clazz, "Class must not be null");
+		// kotlin构造器
 		if (KotlinDetector.isKotlinReflectPresent() && KotlinDetector.isKotlinType(clazz)) {
 			Constructor<T> kotlinPrimaryConstructor = KotlinDelegate.findPrimaryConstructor(clazz);
 			if (kotlinPrimaryConstructor != null) {
@@ -271,6 +282,7 @@ public abstract class BeanUtils {
 	@Nullable
 	public static Method findMethod(Class<?> clazz, String methodName, Class<?>... paramTypes) {
 		try {
+			// 使用方法名称、参数查找类的可访问方法
 			return clazz.getMethod(methodName, paramTypes);
 		}
 		catch (NoSuchMethodException ex) {
@@ -292,6 +304,7 @@ public abstract class BeanUtils {
 	@Nullable
 	public static Method findDeclaredMethod(Class<?> clazz, String methodName, Class<?>... paramTypes) {
 		try {
+			//  使用方法名称、参数查找类的已声明方法
 			return clazz.getDeclaredMethod(methodName, paramTypes);
 		}
 		catch (NoSuchMethodException ex) {
@@ -414,10 +427,12 @@ public abstract class BeanUtils {
 	 */
 	@Nullable
 	public static Method resolveSignature(String signature, Class<?> clazz) {
+		// 根据方法前面解析出Method
 		Assert.hasText(signature, "'signature' must not be empty");
 		Assert.notNull(clazz, "Class must not be null");
 		int startParen = signature.indexOf('(');
 		int endParen = signature.indexOf(')');
+		// 校验是否只有一边的括号
 		if (startParen > -1 && endParen == -1) {
 			throw new IllegalArgumentException("Invalid method signature '" + signature +
 					"': expected closing ')' for args list");
@@ -426,17 +441,22 @@ public abstract class BeanUtils {
 			throw new IllegalArgumentException("Invalid method signature '" + signature +
 					"': expected opening '(' for args list");
 		}
+		// 没有括号
 		else if (startParen == -1) {
 			return findMethodWithMinimalParameters(clazz, signature);
 		}
+		// 有两个括号
 		else {
+			// 获取方法名称
 			String methodName = signature.substring(0, startParen);
+			// 用“,”分割字符串组成字符串数组
 			String[] parameterTypeNames =
 					StringUtils.commaDelimitedListToStringArray(signature.substring(startParen + 1, endParen));
 			Class<?>[] parameterTypes = new Class<?>[parameterTypeNames.length];
 			for (int i = 0; i < parameterTypeNames.length; i++) {
 				String parameterTypeName = parameterTypeNames[i].trim();
 				try {
+					// 转换为class类型
 					parameterTypes[i] = ClassUtils.forName(parameterTypeName, clazz.getClassLoader());
 				}
 				catch (Throwable ex) {
@@ -710,6 +730,7 @@ public abstract class BeanUtils {
 
 		Class<?> actualEditable = target.getClass();
 		if (editable != null) {
+			// editable限制目标对象的类型
 			if (!editable.isInstance(target)) {
 				throw new IllegalArgumentException("Target class [" + target.getClass().getName() +
 						"] not assignable to Editable class [" + editable.getName() + "]");

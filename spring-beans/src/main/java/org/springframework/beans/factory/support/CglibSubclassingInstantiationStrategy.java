@@ -113,6 +113,8 @@ public class CglibSubclassingInstantiationStrategy extends SimpleInstantiationSt
 		 * @return new instance of the dynamically generated subclass
 		 */
 		public Object instantiate(@Nullable Constructor<?> ctor, Object... args) {
+			// 使用动态代理的方式将包含两个特性所对应的逻辑的拦截增强器设置进去，
+			// 这样才可以保证在调用方法的时候会被相应的拦截器增强，返回之为包含拦截器的代理实施
 			Class<?> subclass = createEnhancedSubclass(this.beanDefinition);
 			Object instance;
 			if (ctor == null) {

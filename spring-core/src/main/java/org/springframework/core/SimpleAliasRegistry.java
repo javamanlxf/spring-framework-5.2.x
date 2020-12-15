@@ -211,9 +211,11 @@ public class SimpleAliasRegistry implements AliasRegistry {
 	 * @return the transformed name
 	 */
 	public String canonicalName(String name) {
+		// 确定原始名称，将别名解析为规范名称。
 		String canonicalName = name;
 		// Handle aliasing...
 		String resolvedName;
+		// 循环别名cache，解析出最终的beanName
 		do {
 			resolvedName = this.aliasMap.get(canonicalName);
 			if (resolvedName != null) {

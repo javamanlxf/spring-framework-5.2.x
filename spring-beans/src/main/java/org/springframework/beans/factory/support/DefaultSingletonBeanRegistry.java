@@ -136,9 +136,13 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 */
 	protected void addSingleton(String beanName, Object singletonObject) {
 		synchronized (this.singletonObjects) {
+			// 添加单例对象缓存
 			this.singletonObjects.put(beanName, singletonObject);
+			// 删除单例工厂缓存
 			this.singletonFactories.remove(beanName);
+			// 删除单例提前引用缓存
 			this.earlySingletonObjects.remove(beanName);
+			// 加入单例注册
 			this.registeredSingletons.add(beanName);
 		}
 	}
@@ -165,6 +169,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	@Override
 	@Nullable
 	public Object getSingleton(String beanName) {
+		// allowEarlyReference: 默认允许早期依赖
 		return getSingleton(beanName, true);
 	}
 
@@ -178,22 +183,39 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 */
 	@Nullable
 	protected Object getSingleton(String beanName, boolean allowEarlyReference) {
-		// Quick check for existing instance without full singleton lock
+		// 快速检查现有实例而无需完全单例锁定
+		/**
+		 * 其中singletonObjects里面存放的是初始化之后的单例对象；
+		 * earlySingletonObjects中存放的是一个已完成实例化未完成初始化的早期单例对象；
+		 * 而singletonFactories中存放的是ObjectFactory对象，此对象的getObject方法返回值即刚完成实例化还未开始初始化的单例对象。
+		 * 所以先后顺序是，单例对象先存在于singletonFactories中，后存在于earlySingletonObjects中，最后初始化完成后放入singletonObjects中。
+		 */
+		// 从一级缓存中获取
 		Object singletonObject = this.singletonObjects.get(beanName);
+		// isSingletonCurrentlyInCreation：正在创建中,则不做处理
 		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
+			// 从二级缓存中获取
 			singletonObject = this.earlySingletonObjects.get(beanName);
+			// allowEarlyReference：是否允许从singletonFactories中通过getObject拿到对象
 			if (singletonObject == null && allowEarlyReference) {
+				// 这里应该是Spring 5.x的优化，只有一二级缓存中都获取不到的时候才进行加锁，相对于5.x以前的一开始就加锁后移了，提高了性能
 				synchronized (this.singletonObjects) {
 					// Consistent creation of early reference within full singleton lock
 					singletonObject = this.singletonObjects.get(beanName);
 					if (singletonObject == null) {
 						singletonObject = this.earlySingletonObjects.get(beanName);
 						if (singletonObject == null) {
+							// 从三级缓存中获取,需要注意的是这里获取的不是singletonObject了，而是一个ObjectFactory
+							// （当某些方法需要提前初始化的时候，会调用addSingletonFactory将对应的ObjectFactory初始化策略存储在singletonFactories）
 							ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
 							if (singletonFactory != null) {
 								singletonObject = singletonFactory.getObject();
+								// 把工厂生产出来的singletonObject放入二级缓存中，earlySingletonObjects和singletonFactories互斥
 								this.earlySingletonObjects.put(beanName, singletonObject);
 								this.singletonFactories.remove(beanName);
+
+								// 为什么不把原对象直接放入二级缓存中呢？因为可能有AOP，所以需要生成代理对象
+								// 那为什么不直接把生成好的代理对象放入二级缓存中呢？因为为了性能考虑，如果没有循环引用，是不需要生成对象的。如果我们早早的就在doCreateBean方法中生成好了对象并放入二级缓存中，那是不是影响性能呢？
 							}
 						}
 					}
@@ -212,10 +234,24 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 * @return the registered singleton object
 	 */
 	public Object getSingleton(String beanName, ObjectFactory<?> singletonFactory) {
+		/**
+		 * 1、检查缓存是否已经加载过
+		 * 2、若没有加载，则记录beanName的正在加载状态
+		 * 3、加载单例前，记录加载状态
+		 * 4、通过调用参数传入的ObjectFactory对象singletonFactory实例化bean
+		 * 5、加载单例后的处理方法调用
+		 * 6、将结果记录至缓存并删除加载bean过程中所记录的各种辅助状态
+		 * 7、返回处理结果
+		 */
 		Assert.notNull(beanName, "Bean name must not be null");
+		// 全局变量需要同步
 		synchronized (this.singletonObjects) {
+			// 首先检测对应的bean是否已经加载过，因为singleton模式其实就是复用已创建的bean，所以这一步是必须的
 			Object singletonObject = this.singletonObjects.get(beanName);
+			// 缓存为空才进行初始化
 			if (singletonObject == null) {
+				// this.singletonsCurrentlyInDestruction是个boolean，记录的是当前这个单例是否正在被销毁，
+				// 如果是true，代表单例已经执行了自身的destroy销毁方法，或者有异常的时候执行了destroySingleton方法等情况
 				if (this.singletonsCurrentlyInDestruction) {
 					throw new BeanCreationNotAllowedException(beanName,
 							"Singleton bean creation not allowed while singletons of this factory are in destruction " +
@@ -224,6 +260,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 				if (logger.isDebugEnabled()) {
 					logger.debug("Creating shared instance of singleton bean '" + beanName + "'");
 				}
+				// 记录加载状态
 				beforeSingletonCreation(beanName);
 				boolean newSingleton = false;
 				boolean recordSuppressedExceptions = (this.suppressedExceptions == null);
@@ -231,12 +268,12 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					this.suppressedExceptions = new LinkedHashSet<>();
 				}
 				try {
+					// 初始化bean
 					singletonObject = singletonFactory.getObject();
 					newSingleton = true;
 				}
 				catch (IllegalStateException ex) {
-					// Has the singleton object implicitly appeared in the meantime ->
-					// if yes, proceed with it since the exception indicates that state.
+					// 在此期间，是否使单例对象隐式出现->如果是，请继续处理它，因为异常指示该状态。
 					singletonObject = this.singletonObjects.get(beanName);
 					if (singletonObject == null) {
 						throw ex;
@@ -254,9 +291,11 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					if (recordSuppressedExceptions) {
 						this.suppressedExceptions = null;
 					}
+					// 去掉加载状态
 					afterSingletonCreation(beanName);
 				}
 				if (newSingleton) {
+					// 新单例，加入缓存
 					addSingleton(beanName, singletonObject);
 				}
 			}
