@@ -102,15 +102,22 @@ public class ProxyProcessorSupport extends ProxyConfig implements Ordered, BeanC
 	 * @param proxyFactory the ProxyFactory for the bean
 	 */
 	protected void evaluateProxyInterfaces(Class<?> beanClass, ProxyFactory proxyFactory) {
+		// 这是它最重要的一个方法：就是把该bean所有的实现的接口 都作用在ProxyFactory上当然是有过滤的
+		// 拿到该类所有实现的接口
 		Class<?>[] targetInterfaces = ClassUtils.getAllInterfacesForClass(beanClass, getProxyClassLoader());
+		// 标记：是否存在“有问题的”代理接口  默认是false
 		boolean hasReasonableProxyInterface = false;
 		for (Class<?> ifc : targetInterfaces) {
+			// 条件一：接口非 InitializingBean、DisposableBean、Closeable、AutoCloseable、父接口非 Aware
+			// 条件二：接口非 groovy.lang.GroovyObject、cglib.proxy.Factory、bytebuddy.MockAccess
+			// 条件三：接口方法至少一个
 			if (!isConfigurationCallbackInterface(ifc) && !isInternalLanguageInterface(ifc) &&
 					ifc.getMethods().length > 0) {
 				hasReasonableProxyInterface = true;
 				break;
 			}
 		}
+		// 说明如果没有hasReasonableProxyInterface，但凡有一个有用的接口，就add进去（这样就会采用JDK的动态代理了）
 		if (hasReasonableProxyInterface) {
 			// Must allow for introductions; can't just set interfaces to the target's interfaces only.
 			for (Class<?> ifc : targetInterfaces) {
@@ -118,6 +125,7 @@ public class ProxyProcessorSupport extends ProxyConfig implements Ordered, BeanC
 			}
 		}
 		else {
+			// 没有合理的接口，使用 TargetClass代理
 			proxyFactory.setProxyTargetClass(true);
 		}
 	}

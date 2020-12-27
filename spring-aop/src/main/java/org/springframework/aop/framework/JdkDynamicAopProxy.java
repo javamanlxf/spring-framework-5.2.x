@@ -161,65 +161,71 @@ final class JdkDynamicAopProxy implements AopProxy, InvocationHandler, Serializa
 		Object target = null;
 
 		try {
+			// equals方法的处理：如果被代理的目标对象要执行的方法是equal
+			// 则执行JdkDynamicAopProxy（即代理对象的equal）方法，然后就返回了，也就说spring不对equal方法进行AOP拦截
 			if (!this.equalsDefined && AopUtils.isEqualsMethod(method)) {
-				// The target does not implement the equals(Object) method itself.
+				// 目标本身不实现equals（Object）方法。
 				return equals(args[0]);
 			}
+			// hash方法的处理：如果被代理的目标对象要执行的方法是hashcode则执行JdkDynamicAopProxy
+			//（即代理对象的hashcode）方法，随即也返回，同理，spring也不对hashcode进行AOP拦截
 			else if (!this.hashCodeDefined && AopUtils.isHashCodeMethod(method)) {
-				// The target does not implement the hashCode() method itself.
+				// 目标本身不实现hashCode（）方法。
 				return hashCode();
 			}
 			else if (method.getDeclaringClass() == DecoratingProxy.class) {
-				// There is only getDecoratedClass() declared -> dispatch to proxy config.
+				// 仅声明了getDecoratedClass（）->分派到代理配置。
 				return AopProxyUtils.ultimateTargetClass(this.advised);
 			}
+			// 如果被代理的对象本身就是实现了Advised接口，也不做处理，直接执行，（spring的意思是不是我不做切面的切面呢？）
 			else if (!this.advised.opaque && method.getDeclaringClass().isInterface() &&
 					method.getDeclaringClass().isAssignableFrom(Advised.class)) {
-				// Service invocations on ProxyConfig with the proxy config...
+				// 使用代理配置在ProxyConfig上进行服务调用...
 				return AopUtils.invokeJoinpointUsingReflection(this.advised, method, args);
 			}
 
 			Object retVal;
 
+			// 是否暴露代理对象，默认false可配置为true，如果暴露就意味着允许在线程内共享代理对象，
+			// 注意这是在线程内，也就是说同一线程的任意地方都能通过AopContext获取该代理对象，
+			// 这应该算是比较高级一点的用法了。
 			if (this.advised.exposeProxy) {
-				// Make invocation available if necessary.
+				// 如有必要，使调用可用。
 				oldProxy = AopContext.setCurrentProxy(proxy);
 				setProxyContext = true;
 			}
 
-			// Get as late as possible to minimize the time we "own" the target,
-			// in case it comes from a pool.
+			// 如果目标来自某个池，则应尽可能晚些以最小化我们“拥有”目标的时间。
 			target = targetSource.getTarget();
 			Class<?> targetClass = (target != null ? target.getClass() : null);
 
-			// Get the interception chain for this method.
+			// 获取此方法的拦截链。
 			List<Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
 
-			// Check whether we have any advice. If we don't, we can fallback on direct
-			// reflective invocation of the target, and avoid creating a MethodInvocation.
+			// 检查我们是否有任何建议。如果不这样做，我们可以回退到对目标的直接反射调用，并避免创建MethodInvocation。
+			// 拦截器链如果为空的话就直接调用目标对象的方法
 			if (chain.isEmpty()) {
-				// We can skip creating a MethodInvocation: just invoke the target directly
-				// Note that the final invoker must be an InvokerInterceptor so we know it does
-				// nothing but a reflective operation on the target, and no hot swapping or fancy proxying.
+				// 我们可以跳过创建MethodInvocation的方法：直接调用目标
+				// 请注意，最终的调用者必须是InvokerInterceptor，因此我们知道它仅对目标执行反射操作，并且不执行热交换或奇特代理。
 				Object[] argsToUse = AopProxyUtils.adaptArgumentsIfNecessary(method, args);
 				retVal = AopUtils.invokeJoinpointUsingReflection(target, method, argsToUse);
 			}
+			// 通过ReflectiveMethodInvocation.proceed调用拦截器中的方法和目标对象方法
 			else {
-				// We need to create a method invocation...
+				// 我们需要创建一个方法调用...
 				MethodInvocation invocation =
 						new ReflectiveMethodInvocation(proxy, target, method, args, targetClass, chain);
-				// Proceed to the joinpoint through the interceptor chain.
+				// 通过拦截器链进入连接点，获取返回值
 				retVal = invocation.proceed();
 			}
 
-			// Massage return value if necessary.
+			// 获取返回值类型
 			Class<?> returnType = method.getReturnType();
 			if (retVal != null && retVal == target &&
 					returnType != Object.class && returnType.isInstance(proxy) &&
 					!RawTargetAccess.class.isAssignableFrom(method.getDeclaringClass())) {
-				// Special case: it returned "this" and the return type of the method
-				// is type-compatible. Note that we can't help if the target sets
-				// a reference to itself in another returned object.
+				// 特殊情况：它返回“ this”，并且该方法的返回类型是类型兼容的。
+				// 请注意，如果目标在另一个返回的对象中设置了对自身的引用，我们将无济于事。
 				retVal = proxy;
 			}
 			else if (retVal == null && returnType != Void.TYPE && returnType.isPrimitive()) {
